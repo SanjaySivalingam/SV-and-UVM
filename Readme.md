@@ -1,4 +1,3 @@
-
 # SystemVerilog Event Queue
 
 The SystemVerilog event queue refers to the simulator's scheduling mechanism, organizing events. It organizes events into regions within a time step, ensuring deterministic execution and preventing race conditions.
@@ -63,7 +62,6 @@ The queue iterates until all regions are empty before advancing time.
 * uvm_info/uvm_error messages queued in Reactive may finalize here.
 * Provides stable signal values for logging, critical for debug.
 
-
 # Virtual Interfaces, Functions and Classes
 
 Virtual functions and classes in SystemVerilog enable polymorphism, allowing UVM components to customize behavior via inheritance, critical for extensibility.
@@ -113,7 +111,6 @@ Virtual functions and classes in SystemVerilog enable polymorphism, allowing UVM
 * Avoid pure virtual unless enforcing interfaces.
 * Test polymorphism with derived classes.
 
-
 # Universal Verification Components (UVCs)
 
 A Universal Verification Component (UVC) is a reusable, protocol-specific verification module encapsulating driver, monitor, sequencer, and configuration for an interface.
@@ -155,7 +152,6 @@ It's instantiated in the env, like piso_agent in piso_env, providing modular ver
 * Include config for flexibility.
 * Support active/passive modes.
 * Document UVC interfaces for reuse.
-
 
 # UVM Phases
 
@@ -225,7 +221,6 @@ Components override methods like `build_phase` to define behavior, ensuring stru
 
 Build creates components top-down, ensuring hierarchy exists; connect links ports afterward, like PISO monitor to scoreboard, preventing null pointer issues.
 
-
 # UVM Objections
 
 Objections in UVM control the duration of time-consuming phases (e.g., run_phase), ensuring simulation runs until all verification tasks complete (e.g., raise_objection in piso_test).
@@ -286,7 +281,6 @@ They ensure the test runs until verification completes, like driving all PISO se
 * Drop after all tasks complete.
 * Log objection activity for complex testbenches.
 
-
 # UVM Hierarchy
 
 Components form a tree (e.g., test -> env -> agent), defining parent-child relationships for initialization, configuration, and reporting.
@@ -313,7 +307,6 @@ I use uvm_root::print_topology() to inspect the tree and check for missing or mi
 ### Why avoid self-creation in build_phase?
 
 It risks recursive instantiation and violates UVM's hierarchical initialization, where parents build children in a top-down order.
-
 
 # TLM Components
 
@@ -373,7 +366,6 @@ TLM decouples components, enabling one-to-many communication, like PISO monitor 
 * Use uvm_analysis_port for monitors, uvm_analysis_imp for subscribers.
 * Connect in connect_phase.
 * Keep port names consistent (e.g., ap).
-
 
 # TLM Methods
 
@@ -442,7 +434,6 @@ The monitor's write calls put internally, adding transactions to the FIFO, decou
 * Use get for guaranteed retrieval.
 * Use try_get/try_put for timeout-sensitive logic.
 * Check can_get before get in complex flows.
-
 
 # UVM Analysis Port
 
@@ -515,7 +506,6 @@ Ports decouple components, allowing the monitor to send data to multiple subscri
 * Implement custom read only if essential.
 * Avoid pull-based designs in analysis paths.
 
-
 # UVM TLM Analysis FIFO
 
 uvm_tlm_analysis_fifo buffers transactions between an analysis port and a subscriber, decoupling their execution to prevent stalls.
@@ -568,7 +558,6 @@ It decouples timing, allowing PISO's monitor to run independently of coverage pr
 * Keep FIFO size reasonable (e.g., 100) based on transaction rates.
 * Monitor FIFO fullness for debug with fifo.used().
 
-
 # UVM Primary Operations
 
 ## Core Operations
@@ -611,7 +600,6 @@ For performance-critical classes or non-standard types, I'd override methods lik
 * Call super.do_* to preserve base behavior.
 * Use supporting objects (e.g., printer) for flexibility.
 
-
 # UVM Reporting Macros
 
 UVM provides `uvm_info`, `uvm_warning`, `uvm_error`, `uvm_fatal` to log messages during simulation, aiding debugging and verification tracking. `$sformatf` formats messages for clarity.
@@ -648,7 +636,6 @@ UVM provides `uvm_info`, `uvm_warning`, `uvm_error`, `uvm_fatal` to log messages
 * Used in messages: `$sformatf("data_in=%4b", data_in)`.
 * Supports formats: %d (decimal), %b (binary), %h (hex), %s (string).
 
-
 # UVM Factory Macros
 
 `uvm_object_utils` and `uvm_component_utils` register classes with the UVM factory, enabling creation and overrides, but they target different class types.
@@ -681,7 +668,6 @@ UVM provides `uvm_info`, `uvm_warning`, `uvm_error`, `uvm_fatal` to log messages
 
 * Both enable type_id::create, but components need parent.
 
-
 # UVM Object Creation
 
 Constructors initialize UVM objects (uvm_object) or components (uvm_component). UVM provides two creation methods:
@@ -708,7 +694,6 @@ Constructors initialize UVM objects (uvm_object) or components (uvm_component). 
 
 * For components, parent sets the hierarchy (e.g., drv under env).
 * Objects lack parents, using only name.
-
 
 # UVM Config DB
 
@@ -791,7 +776,6 @@ It uses the most specific matching scope. For example, a set to env.drv.seq over
 * Log the get result to confirm the value was retrieved
 * Use uvm_info or simulator debug tools to trace get failures
 
-
 # SystemVerilog $cast() Function
 
 ## Basic Usage
@@ -832,7 +816,6 @@ if (!$cast(tmp, rhs)) `uvm_fatal("CAST", "Invalid type") //Explicit error handli
 * Always cast after super.do_copy
 * Check null for nested objects
 * Test do_copy with complex transactions
-
 
 # Coverage in UVM
 
@@ -909,7 +892,6 @@ Labelling coverpoints assigns meaningful names to variables or expressions in co
 * Always label coverpoints and crosses
 * Use signal names (e.g., data_in)
 * Verify labels in coverage reports
-
 
 # UVM Subscriber
 
@@ -998,7 +980,6 @@ Yes, but uvm_subscriber's analysis_export is preferred for standard tasks like P
 * Verify connections with uvm_root::print_topology()
 * Connect analysis_export in env.connect_phase
 
-
 # UVM Agent
 
 A UVM agent encapsulates verification components (driver, monitor, sequencer) for a specific DUT interface, providing modularity and reusability in testbenches.
@@ -1035,7 +1016,6 @@ Each agent handles one interface, running in parallel, so I can verify a PISO an
 ### How does connect_phase work with agents?
 
 It links TLM ports, like PISO monitor's analysis port to a subscriber's export in env, ensuring transactions flow correctly within the agent hierarchy.
-
 
 # UVM Sequencer
 
@@ -1173,7 +1153,6 @@ p_sequencer is a typed handle to a sequencer, like piso_sequencer, letting a seq
 * Use default arbitration unless specific needs arise
 * Debug sequence stalls with sequencer logs
 
-
 # UVM Virtual Sequences and Sequencers
 
 ## UVM Virtual Sequencer
@@ -1226,12 +1205,53 @@ It defines high-level test scenarios without generating transactions itself.
 * **Execution** : Runs on the virtual sequencer, delegating to agent sequencers.
 * **PISO Context** : Could coordinate a reset sequence followed by a data load/shift sequence.
 
+## `uvm_declare_p_sequencer()
+
+The uvm_declare_p_sequencer macro is a UVM utility that declares a **sequencer pointer** (p_sequencer) of a specified type within a sequence class.
+
+```systemverilog
+`uvm_declare_p_sequencer(piso_virtual_sequencer)
+```
+
+* **Argument** : piso_virtual_sequencer
+* **Effect** : It declares a variable p_sequencer of type piso_virtual_sequencer within the piso_virtual_sequence class.
+
+The macro expands to roughly this code:
+
+```systemverilog
+piso_virtual_sequencer p_sequencer;
+```
+
+Additionally, it ensures that p_sequencer is properly typed and accessible for use in the sequence's body task to interact with the sequencer.
+
+### Role of p_sequencer
+
+* The p_sequencer variable points to an instance of piso_virtual_sequencer
+* piso_virtual_sequencer contains a handle to piso_seqr (a piso_sequencer), which is the actual sequencer driving piso_seq_item transactions to the DUT via the driver.
+
+### Why Use the Macro?
+
+* The macro declares p_sequencer as a typed handle to piso_virtual_sequencer, allowing the body task to access piso_seqr (e.g., p_sequencer.piso_seqr) to start sequences.
+* Without p_sequencer, you'd need to manually cast the generic m_sequencer (inherited from uvm_sequence) to piso_virtual_sequencer, which is error-prone:
+
+```systemverilog
+piso_virtual_sequencer vseqr;
+$cast(vseqr, m_sequencer); // Manual cast, risky
+reset_seq.start(vseqr.piso_seqr);
+```
+
+* The macro automates this, ensuring type safety and convenience.
+
+### Virtual Sequence Flexibility
+
+* piso_virtual_sequence coordinates multiple sequences, potentially across multiple agents (e.g., in a combined PISO+SIPO testbench).
+* p_sequencer provides a typed handle to the virtual sequencer, which may contain multiple sequencer handles (piso_seqr, or later sipo_seqr).
+
 ## Summary
 
 * The **virtual sequencer** is the hub, holding references to agent sequencers.
 * The **virtual sequence** is the script, running on the virtual sequencer and directing which sequences run on which agent sequencers.
 * In a test, you instantiate a virtual sequence, set its p_sequencer, and start it on the virtual sequencer, which then triggers sub-sequences.
-
 
 # UVM Factory Type Overrides
 
@@ -1300,7 +1320,6 @@ Use uvm_factory::print() to verify overrides.
 * Use instance overrides for targeted changes
 * Verify overrides with uvm_factory::print()
 
-
 # Copying Objects in UVM
 
 Copying objects is essential in UVM for passing transactions (e.g., from monitor to scoreboard) without modifying the original.
@@ -1358,7 +1377,6 @@ req_copy.copy(req);
 * Deep copy depends on `do_copy()` implementation
 * Used when modifying an existing instance rather than creating a new one
 
-
 # Cloning Objects in UVM
 
 `clone()` creates a new instance of an object and copies the original's field values into it, typically performing a deep copy by default.
@@ -1396,7 +1414,6 @@ $cast(req_clone, req.clone());
 
 * Allocates memory for a new object, ensuring a fresh instance
 * Used when a new, independent object is needed
-
 
 # Dist Operator in SystemVerilog
 
