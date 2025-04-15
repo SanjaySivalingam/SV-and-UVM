@@ -1227,6 +1227,48 @@ It defines high-level test scenarios without generating transactions itself.
 * **Execution** : Runs on the virtual sequencer, delegating to agent sequencers.
 * **PISO Context** : Could coordinate a reset sequence followed by a data load/shift sequence.
 
+## `uvm_declare_p_sequencer()
+
+The uvm_declare_p_sequencer macro is a UVM utility that declares a **sequencer pointer** (p_sequencer) of a specified type within a sequence class.
+
+```systemverilog
+`uvm_declare_p_sequencer(piso_virtual_sequencer)
+```
+
+* **Argument** : piso_virtual_sequencer
+* **Effect** : It declares a variable p_sequencer of type piso_virtual_sequencer within the piso_virtual_sequence class.
+
+The macro expands to roughly this code:
+
+```systemverilog
+piso_virtual_sequencer p_sequencer;
+```
+
+Additionally, it ensures that p_sequencer is properly typed and accessible for use in the sequence's body task to interact with the sequencer.
+
+### Role of p_sequencer
+
+* The p_sequencer variable points to an instance of piso_virtual_sequencer
+* piso_virtual_sequencer contains a handle to piso_seqr (a piso_sequencer), which is the actual sequencer driving piso_seq_item transactions to the DUT via the driver.
+
+### Why Use the Macro?
+
+* The macro declares p_sequencer as a typed handle to piso_virtual_sequencer, allowing the body task to access piso_seqr (e.g., p_sequencer.piso_seqr) to start sequences.
+* Without p_sequencer, you'd need to manually cast the generic m_sequencer (inherited from uvm_sequence) to piso_virtual_sequencer, which is error-prone:
+
+```systemverilog
+piso_virtual_sequencer vseqr;
+$cast(vseqr, m_sequencer); // Manual cast, risky
+reset_seq.start(vseqr.piso_seqr);
+```
+
+* The macro automates this, ensuring type safety and convenience.
+
+### Virtual Sequence Flexibility
+
+* piso_virtual_sequence coordinates multiple sequences, potentially across multiple agents (e.g., in a combined PISO+SIPO testbench).
+* p_sequencer provides a typed handle to the virtual sequencer, which may contain multiple sequencer handles (piso_seqr, or later sipo_seqr).
+
 ## Summary
 
 * The **virtual sequencer** is the hub, holding references to agent sequencers.
