@@ -1402,6 +1402,201 @@ p_sequencer is a typed handle to a sequencer, like piso_sequencer, letting a seq
 * Use default arbitration unless specific needs arise
 * Debug sequence stalls with sequencer logs
 
+# UVM Sequence Methods
+
+## `pre_start`
+
+**Definition**:
+A virtual task called automatically before a sequence’s `body` task when `start` is invoked. It provides a hook for setup, such as configuring phase settings or logging, before execution begins.
+
+**Syntax**:
+
+```systemverilog
+virtual task pre_start();
+```
+
+- **No arguments**; override as needed.
+- **Called**: Always before `pre_body` and `body` in `seq.start(sequencer)`.
+
+**Example**:
+
+```systemverilog
+class sipo_reset_sequence extends uvm_sequence #(sipo_seq_item);
+    `uvm_object_utils(sipo_reset_sequence)
+    function new(string name = "sipo_reset_sequence");
+        super.new(name);
+    endfunction
+    task pre_start();
+        `uvm_info("SEQ", "Setting up reset sequence", UVM_MEDIUM)
+        super.pre_start();
+    endtask
+    task body();
+        req = sipo_seq_item::type_id::create("req");
+        start_item(req);
+        req.rst_n = 0;
+        finish_item(req);
+    endtask
+endclass
+```
+
+- **Note**: In SIPO, logs initialization for `sipo_reset_sequence`. Always called, unaffected by `start`’s `call_pre_post`.
+
+## `post_start`
+
+**Definition**:
+A virtual task called automatically after a sequence’s `body` task completes when `start` is invoked. It provides a hook for cleanup, such as logging completion, after execution.
+
+**Syntax**:
+
+```systemverilog
+virtual task post_start();
+```
+
+- **No arguments**; override as needed.
+- **Called**: Always after `body` and `post_body` in `seq.start(sequencer)`.
+
+**Example**:
+
+```systemverilog
+class sipo_reset_sequence extends uvm_sequence #(sipo_seq_item);
+    `uvm_object_utils(sipo_reset_sequence)
+    function new(string name = "sipo_reset_sequence");
+        super.new(name);
+    endfunction
+    task body();
+        req = sipo_seq_item::type_id::create("req");
+        start_item(req);
+        req.rst_n = 0;
+        finish_item(req);
+    endtask
+    task post_start();
+        `uvm_info("SEQ", "Reset sequence finished", UVM_MEDIUM)
+        super.post_start();
+    endtask
+endclass
+```
+
+- **Note**: In SIPO, logs completion for `sipo_shift_load_sequence`. Always called, unaffected by `start`’s `call_pre_post`.
+
+## `pre_body`
+
+**Definition**:
+A virtual task called before a sequence’s `body` task, if enabled by `start`. It’s a hook for sequence-specific setup, such as randomizing parameters or raising objections.
+
+**Syntax**:
+
+```systemverilog
+virtual task pre_body();
+```
+
+- **No arguments**; override as needed.
+- **Called**: Conditionally, after `pre_start`, before `body`, if `call_pre_post = 1` in `start`.
+
+**Example**:
+
+```systemverilog
+class sipo_shift_load_sequence extends uvm_sequence #(sipo_seq_item);
+    `uvm_object_utils(sipo_shift_load_sequence)
+    function new(string name = "sipo_shift_load_sequence");
+        super.new(name);
+    endfunction
+    task pre_body();
+        `uvm_info("SEQ", "Preparing shift data", UVM_MEDIUM)
+    endtask
+    task body();
+        req = sipo_seq_item::type_id::create("req");
+        start_item(req);
+        req.load = 1;
+        finish_item(req);
+    endtask
+endclass
+```
+
+- **Note**: In SIPO, could prepare `sipo_shift_load_sequence` data. Skipped if `start(..., call_pre_post = 0)`.
+
+## `post_body`
+
+**Definition**:
+A virtual task called after a sequence’s `body` task, if enabled by `start`. It’s a hook for sequence-specific cleanup, such as verifying state or dropping objections.
+
+**Syntax**:
+
+```systemverilog
+virtual task post_body();
+```
+
+- **No arguments**; override as needed.
+- **Called**: Conditionally, after `body`, before `post_start`, if `call_pre_post = 1` in `start`.
+
+**Example**:
+
+```systemverilog
+class sipo_shift_load_sequence extends uvm_sequence #(sipo_seq_item);
+    `uvm_object_utils(sipo_shift_load_sequence)
+    function new(string name = "sipo_shift_load_sequence");
+        super.new(name);
+    endfunction
+    task body();
+        req = sipo_seq_item::type_id::create("req");
+        start_item(req);
+        req.load = 1;
+        finish_item(req);
+    endtask
+    task post_body();
+        `uvm_info("SEQ", "Shift data sent", UVM_MEDIUM)
+    endtask
+endclass
+```
+
+- **Note**: In SIPO, could confirm `sipo_shift_load_sequence` completion. Skipped if `start(..., call_pre_post = 0)`.
+
+## `call_pre_post` in `start`
+
+**Definition**:
+An optional argument in the `start` method that controls whether `pre_body` and `post_body` tasks are executed. It’s part of the `start` method’s signature, which also includes `this_priority` for sequence arbitration.
+
+**Syntax**:
+
+```systemverilog
+virtual task start(
+    uvm_sequencer_base sequencer,
+    uvm_sequence_base parent_sequence = null,
+    int this_priority = -1,
+    bit call_pre_post = 1
+);
+```
+
+- `sequencer`: Target sequencer (e.g., `env.vseqr`).
+- `parent_sequence`: Parent sequence, typically `null` for top-level sequences.
+- `this_priority`: Sequence priority; `-1` means default priority (uses sequencer’s arbitration, often parent’s priority or 100).
+- `call_pre_post`: `1` to call `pre_body` and `post_body`, `0` to skip them.
+
+**Example**:
+
+```systemverilog
+class sipo_test extends uvm_test;
+    sipo_env env;
+    sipo_virtual_sequence vseq;
+    `uvm_component_utils(sipo_test)
+    function new(string name, uvm_component parent);
+        super.new(name, parent);
+    endfunction
+    task run_phase(uvm_phase phase);
+        phase.raise_objection(this);
+        vseq = sipo_virtual_sequence::type_id::create("vseq");
+        vseq.start(env.vseqr, null, -1, 0); // -1: default priority, 0: skip pre_body/post_body
+        phase.drop_objection(this);
+    endtask
+endclass
+```
+
+- **Notes**:
+  - In SIPO, `vseq.start(env.vseqr)` defaults to `this_priority = -1`, `call_pre_post = 1`, calling `pre_body`/`post_body`.
+  - Use `this_priority = -1` for no priority conflicts (common in SIPO, as sequences run sequentially).
+  - Use `call_pre_post = 0` to optimize if `pre_body`/`post_body` are empty, skipping unnecessary task calls.
+  - Example with explicit priority: `vseq.start(env.vseqr, null, 200, 1)` prioritizes `vseq` higher than others.
+
+
 # UVM Virtual Sequences and Sequencers
 
 ## UVM Virtual Sequencer
