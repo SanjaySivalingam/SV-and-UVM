@@ -310,112 +310,113 @@ I use uvm_root::print_topology() to inspect the tree and check for missing or mi
 
 It risks recursive instantiation and violates UVM's hierarchical initialization, where parents build children in a top-down order.
 
-# TLM Components
+# UVM TLM Analysis Components
 
 Transaction-Level Modeling (TLM) components in UVM enable communication between testbench components (e.g., monitor to scoreboard) using high-level transactions instead of pin-level signals, improving modularity and scalability.
 
-## Component Types
+## Analysis Port
 
-### Port
+The uvm_analysis_port broadcasts transactions to multiple subscribers (e.g., scoreboards, coverage collectors), supporting one-to-many communication without knowing their identities, decoupling the monitor from other components.
 
-* Initiates communication by sending transactions.
-* Example: uvm_analysis_port for broadcasting.
-* The sender (e.g., monitor) declares a uvm_analysis_port.
+### Declaration
 
-#### Syntax
 ```systemverilog
 uvm_analysis_port #(TRANS) NAME;
 ```
-- **TRANS**: Transaction type (e.g., seq_item).
-- **NAME**: Port name (e.g., ap).
 
-#### Role
-`ap.write(txn)` broadcasts transactions to all connected subscribers.
+* **TRANS** : Transaction type (e.g., seq_item)
+* **NAME** : Port name (e.g., ap)
 
-### Imp (Implementation)
+### Usage
 
-* A UVM TLM component that implements an **analysis port subscriber** (receives transactions via a write function).
-* Receives transactions, implementing methods like write.
-* Example: uvm_analysis_imp in scoreboards.
+* `ap.write(txn)` broadcasts transactions to all connected subscribers
+* Non-blocking: `write` executes instantly, preventing monitor stalls
+* Push-based model for simplifying monitors
 
-#### Analysis Imp Declaration
+## Analysis Imp
+
+A UVM TLM component that implements an analysis port subscriber (receives transactions via a write function).
+
+### Declaration
 
 ```systemverilog
 uvm_analysis_imp #(TRANS, COMP) NAME;
 ```
-- **TRANS**: Transaction type (e.g., seq_item).
-- **COMP**: Component type with write (e.g., scoreboard).
-- **NAME**: Instance name (e.g., ap).
 
-#### Connecting Port to Imp
+* **TRANS** : Transaction type (e.g., seq_item)
+* **COMP** : Component type with write (e.g., scoreboard)
+* **NAME** : Instance name (e.g., ap)
 
-Connections are made in connect_phase (e.g., in env)
+### Why Two Type Arguments?
 
-```systemverilog
-PORT.connect(IMP);
-```
-- **PORT**: uvm_analysis_port #(TRANS) (e.g., agt.mon.ap).
-- **IMP**: uvm_analysis_imp #(TRANS, COMP) or uvm_subscriber::analysis_export (e.g., scb.ap).
+1. **Transaction Type** : Ensures the write function receives the correct transaction type
+2. **Component Type** :
 
-#### Why Two Arguments?
+* Binds the analysis imp to the component implementing write
+* Ensures ap.write(txn) calls the component's write method
+* Allows multiple analysis imps in one component with different transaction types
 
-1. **Transaction Type**:
-   - Ensures the write function receives the correct transaction type.
-2. **Component Type**:
-   - Binds the analysis imp to the component implementing write.
-   - Ensures ap.write(txn) calls the component's write, not another class's write.
-   - Allows multiple analysis imps in one component with different transaction types.
-3. **Flexibility**:
-   - The dual parameters decouple transaction type from component type, supporting diverse use cases (e.g., one scoreboard handling multiple DUTs' transactions).
+## Analysis Export
 
-### Export
+Acts as an interface to receive transactions from a uvm_analysis_port and forward them to a component's write function or another TLM component.
 
-* uvm_analysis_export is a TLM component that acts as an **interface** to receive transactions from a uvm_analysis_port and forward them to a component's write function or another TLM component.
-* Connects ports to imps, acting as a bridge.
-* Example: seq_item_export in sequencers.
+### Declaration
 
-#### Role
-It's typically used to expose a component's analysis capability (e.g., write function) to external ports, allowing connections in a hierarchical or modular testbench.
-
-#### Key Difference from uvm_analysis_imp
-- **uvm_analysis_imp**: Directly implements the write function for a specific component.
-- **uvm_analysis_export**: Acts as a passthrough or connector, forwarding transactions to an internal imp or another export, without implementing write itself.
-
-#### Syntax of uvm_analysis_export
-
-**Declaration**:
 ```systemverilog
 uvm_analysis_export #(TRANS) NAME;
 ```
-- **TRANS**: The transaction type.
-- **NAME**: The export instance name (e.g., analysis_export).
 
-**Instantiation**:
-```systemverilog
-NAME = new("NAME", PARENT);
-```
-- Creates the export, associating it with a parent component.
+* **TRANS** : Transaction type
+* **NAME** : Export instance name (e.g., analysis_export)
 
-**Connection**:
+### Key Difference from Analysis Imp
+
+* **Analysis Imp** : Directly implements the write function for a specific component
+* **Analysis Export** : Acts as a passthrough/connector without implementing write itself
+
+### Usage
+
+* Typically used to expose a component's analysis capability to external ports
+* Takes only one type argument (transaction type) because it doesn't bind to a specific component
+
+## Analysis FIFO (uvm_tlm_analysis_fifo)
+
+Buffers transactions between an analysis port and a subscriber, decoupling their execution to prevent stalls.
+
+### Role
+
+* Stores transactions from uvm_analysis_port until processed
+* Non-blocking for sender (e.g., monitor)
+
+### Interface
+
+* **write** : Adds transaction to FIFO
+* **get/peek** : Retrieves transactions for subscriber
+
+### Configuration
+
+* Default size unlimited, configurable via new(size)
+* Monitor's write blocks if FIFO is full
+
+## Connecting Components
+
+Connections are made in connect_phase (e.g., in environment):
+
 ```systemverilog
+// Connect port to imp
+PORT.connect(IMP);
+
+// Connect port to export
 PORT.connect(EXPORT);
+
+// Connect port to fifo
+PORT.connect(FIFO.analysis_export);
 ```
-- **PORT**: A uvm_analysis_port #(TRANS).
-- **EXPORT**: A uvm_analysis_export #(TRANS).
 
-**Note**: Unlike uvm_analysis_imp, uvm_analysis_export takes **only one argument** (the transaction type), because it doesn't bind to a specific component's write function—it's a connector, not an endpoint.
+## Other TLM Components
 
-### Others
-
-* **Fifo** : Buffers transactions (uvm_tlm_fifo).
-* **Analysis Port** : Broadcasts to multiple subscribers.
-* **Get/Put Ports** : Support request-response (less common in PISO).
-
-## In This Testbench
-
-* **Port** : ap in piso_monitor sends piso_seq_item.
-* **Imp** : ap in piso_scoreboard receives via write.
-* **Connection** : connect_phase links them.
+* **Get/Put Ports** : Support request-response (used for driver-sequencer, unlike analysis)
+* **Fifo (uvm_tlm_fifo)** : General purpose transaction buffer
 
 ## Key Concepts
 
@@ -423,27 +424,48 @@ PORT.connect(EXPORT);
 
 TLM ports allow components to communicate without direct references, enhancing reusability.
 
-### Non-Blocking
+### Broadcast
 
-write in analysis ports ensures no stalls, critical for monitor performance.
+One analysis port can connect to multiple imps/exports, unlike sequencer-driver (one-to-one).
 
-### Fifo
+### Hierarchical Connections
 
-Useful for buffering in complex testbenches, not needed for simple PISO.
+Components connect via the uvm_component hierarchy.
 
 ## FAQs
 
-### Why use TLM over direct method calls?
+### How does analysis port differ from get/put ports?
 
-TLM decouples components, enabling one-to-many communication, like PISO monitor broadcasting to scoreboard and coverage, without modifying code.
+Analysis ports broadcast non-blocking to multiple subscribers; get/put are blocking for request-response communication.
+
+### Why no read in analysis ports?
+
+Analysis ports are push-based for broadcasting, avoiding complex pull semantics.
+
+### Why use analysis ports instead of direct calls?
+
+Ports decouple components, allowing monitors to send data to multiple subscribers without modifying code.
+
+### When to use uvm_tlm_analysis_fifo?
+
+When subscribers are slower than monitors, to buffer transactions and prevent stalls, though direct ports suffice for simple designs.
+
+### What happens if FIFO is full?
+
+put blocks, stalling the monitor, or try_put fails, so size the FIFO based on expected transaction rates.
 
 ## Best Practices
 
-* Use uvm_analysis_port for monitors, uvm_analysis_imp for subscribers.
-* Connect in connect_phase.
-* Keep port names consistent (e.g., ap).
+* Use uvm_analysis_port for all monitor outputs
+* Connect ports in connect_phase
+* Keep port names consistent (e.g., ap)
+* Avoid modifying transactions in write
+* Use FIFOs for heavy subscribers (e.g., complex coverage)
+* Keep FIFO size reasonable based on transaction rates
+* Monitor FIFO fullness for debug with fifo.used()
+* Avoid pull-based designs in analysis paths (uvm_get_port for driver-sequencer).
 
-# TLM Methods
+# UVM TLM Methods
 
 get, peek, put (and try variations) methods facilitate transaction passing between UVM components, typically used with uvm_tlm_fifo, uvm_get_port, or uvm_put_port, enabling blocking and non-blocking communication.
 
@@ -510,129 +532,6 @@ The monitor's write calls put internally, adding transactions to the FIFO, decou
 * Use get for guaranteed retrieval.
 * Use try_get/try_put for timeout-sensitive logic.
 * Check can_get before get in complex flows.
-
-# UVM Analysis Port
-
-The uvm_analysis_port broadcasts transactions to multiple subscribers (e.g., scoreboards, coverage collectors), supporting one-to-many communication in verification, without knowing their identities, decoupling the monitor from other components.
-
-## Basic Components
-
-### Analysis Port
-
-* Type: `uvm_analysis_port #(T)` (e.g., piso_seq_item).
-* Method: `write(T t)` sends transactions to all connected imps.
-
-### Related Components
-
-* **Analysis Export** : Connects to imps (`uvm_analysis_export`).
-* **Analysis Fifo** : Buffers transactions (`uvm_tlm_analysis_fifo`).
-* **Subscribers** : Classes implementing write (e.g., `uvm_subscriber`).
-
-## Characteristics
-
-### Blocking Ports
-
-uvm_get_port, uvm_put_port for driver-sequencer (not analysis).
-
-### Hierarchical Connections
-
-Via uvm_component hierarchy.
-
-### Broadcast
-
-One port can connect to multiple imps, unlike sequencer-driver (one-to-one).
-
-### Non-Blocking
-
-write executes instantly, preventing monitor stalls.
-
-## Implementation Details
-
-### Fifo Use
-
-uvm_tlm_analysis_fifo decouples timing if subscribers are slow, rare for PISO.
-
-### Push Model
-
-UVM favors push (write) for analysis to simplify monitors.
-
-### Pull Model
-
-uvm_get_port for driver-sequencer, not analysis.
-
-## FAQs
-
-### How does analysis port differ from get/put ports?
-
-Analysis ports broadcast non-blocking to multiple subscribers, ideal for PISO monitoring; get/put are blocking for request-response, like driver-sequencer.
-
-### Why no read in analysis ports?
-
-Analysis ports are push-based for broadcasting, like PISO monitor sending transactions to subscribers, avoiding complex pull semantics.
-
-### Why use analysis ports instead of direct calls?
-
-Ports decouple components, allowing the monitor to send data to multiple subscribers without modifying its code, supporting reuse and flexibility.
-
-## Best Practices
-
-* Use analysis ports for all monitor outputs.
-* Connect to subscribers in env.connect_phase.
-* Avoid modifying transactions in write.
-* Implement custom read only if essential.
-* Avoid pull-based designs in analysis paths.
-
-# UVM TLM Analysis FIFO
-
-uvm_tlm_analysis_fifo buffers transactions between an analysis port and a subscriber, decoupling their execution to prevent stalls.
-
-## Role
-
-* Stores transactions from uvm_analysis_port until processed.
-* Non-blocking for sender (e.g., monitor).
-
-## Interface
-
-* **write** : Adds transaction to FIFO.
-* **get/peek** : Retrieves transactions for subscriber.
-
-## Key Characteristics
-
-### Decoupling
-
-FIFO allows monitor to proceed without waiting for cov.
-
-### Blocking Get
-
-get waits for transactions, suitable for run_phase.
-
-### Size
-
-Default unlimited, configurable via new(size). Monitor's write blocks if FIFO is full.
-
-## FAQs
-
-### Why set FIFO size?
-
-To control memory and introduce backpressure, ensuring PISO's coverage doesn't overwhelm simulation resources.
-
-### What happens if FIFO is full?
-
-put blocks, stalling the monitor, or try_put fails, so I size the FIFO based on expected transaction rates.
-
-### When to use uvm_tlm_analysis_fifo?
-
-When subscribers, like PISO coverage, are slower than monitors, to buffer transactions and prevent stalls, though direct ports suffice for simple designs.
-
-### What's the advantage over direct connection?
-
-It decouples timing, allowing PISO's monitor to run independently of coverage processing.
-
-## Best Practices
-
-* Use for heavy subscribers (e.g., complex coverage).
-* Keep FIFO size reasonable (e.g., 100) based on transaction rates.
-* Monitor FIFO fullness for debug with fifo.used().
 
 # UVM Primary Operations
 
