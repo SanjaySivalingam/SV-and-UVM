@@ -16,7 +16,11 @@ class piso_load_shift_sequence extends piso_base_sequence;
       req.load = 0; req.data_in = 0;
       finish_item(req);
     endtask
-
+  
+  /*
+  always create a fresh instance for every transaction (instead of creating in new()) to avoid race conditions, 
+  state contamination, concurrency issues and improve flexibility
+  */  
     task body;
       piso_seq_item req;
       repeat (num_txns) begin
