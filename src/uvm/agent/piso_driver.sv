@@ -28,7 +28,7 @@ class piso_driver extends uvm_driver #(piso_seq_item);
       @(vif.cb);
       vif.cb.rst_n <= 1;
       forever begin
-        piso_seq_item req;
+        piso_seq_item req = piso_seq_item::type_id::create("req");
         seq_item_port.get_next_item(req); // retrieves the next sequence item from the sequencer, blocking until available.
         @(vif.cb);
         vif.cb.rst_n <= req.rst_n;
