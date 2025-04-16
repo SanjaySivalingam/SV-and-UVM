@@ -28,7 +28,7 @@ module piso #
         data_out  <= shift_reg[WIDTH-1];            // Output MSB
       end
     end
-    assert property (@(posedge clk) load |=> data_out == $past(data_in[3])) else
+  assert property (@(posedge clk) load |=> data_out == $past(data_in[WIDTH-1])) else
       $error("Load output mismatch");
     /*
     //Option 2: Immediate check with #1step
