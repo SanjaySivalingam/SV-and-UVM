@@ -22,13 +22,14 @@ class piso_driver extends uvm_driver #(piso_seq_item);
       The sequencer would stall, as it waits for the driver to signal completion, potentially hanging the simulation.
     */
     task run_phase(uvm_phase phase); // Drives DUT signals
+      piso_seq_item req;
       vif.cb.load <= 0;
       vif.cb.data_in <= 0;
       vif.cb.rst_n <= 0;
       @(vif.cb);
       vif.cb.rst_n <= 1;
       forever begin
-        piso_seq_item req = piso_seq_item::type_id::create("req");
+        req = piso_seq_item::type_id::create("req");
         seq_item_port.get_next_item(req); // retrieves the next sequence item from the sequencer, blocking until available.
         @(vif.cb);
         vif.cb.rst_n <= req.rst_n;
