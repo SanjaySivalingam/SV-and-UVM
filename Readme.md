@@ -310,7 +310,7 @@ I use uvm_root::print_topology() to inspect the tree and check for missing or mi
 
 It risks recursive instantiation and violates UVM's hierarchical initialization, where parents build children in a top-down order.
 
-# TLM Analysis Components
+# TLM Components
 
 Transaction-Level Modeling (TLM) components in UVM enable communication between testbench components (e.g., monitor to scoreboard) using high-level transactions instead of pin-level signals, improving modularity and scalability.
 
