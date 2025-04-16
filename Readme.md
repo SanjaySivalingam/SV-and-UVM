@@ -267,6 +267,39 @@ set_starting_phase is relevant for sequences that:
 * Run indefinitely (e.g., background stimulus).
 * Use pre_start/post_start to manage phase state.
 
+## Drain Time
+
+### Definition
+* A delay after objections reach zero, allowing residual activity to complete.
+  
+### Syntax
+`phase.phase_done.set_drain_time(component, time);`
+   * component: The object setting the time (e.g., this = sipo_test).
+   * time: Delay in time units (e.g., 1000 ns).
+     
+### Behavior
+   * UVM takes the **maximum** drain time set by any component.
+   * Example: If sipo_test sets 1000 and another sets 500, UVM waits 1000.
+     
+### Why Needed
+   * Covers latency in:
+      * DUT signal propagation (e.g., data_out after load).
+      * TLM pipelines (e.g., sipo_monitor to sipo_scoreboard).
+      * Sequence completion (e.g., last sipo_seq_item in sipo_sequencer).
+        
+### Alternative to Drain Time
+
+#### Timeout
+* A global simulation timeout can be set:
+`phase.phase_done.set_timeout(100_000);`
+* Ends run_phase if objections persist too long (e.g., hung test)
+* Differs from drain time, which applies **after** objections drop.
+* 
+#### Manual Delays
+* You could add #delay before drop_objection:
+`vseq.start(env.vseqr); #1000; phase.drop_objection(this);`
+* **Downside**: Less flexible; drain time is managed by UVM's objection mechanism, ensuring all components' needs are met.
+
 ## FAQs
 
 ### What happens without drop_objection?
