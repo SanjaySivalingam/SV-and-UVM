@@ -258,6 +258,30 @@ uvm_objection::trace() logs objection activity.
 
 **set_starting_phase(phase)** sets the phase in which a sequence's objections are managed (e.g., raising/dropping objections in run_phase).
 
+**Syntax**:
+
+```systemverilog
+function void set_starting_phase(uvm_phase phase);
+```
+
+- `phase`: A `uvm_phase` object representing the target phase (e.g., `run_phase`).
+
+**Example**:
+
+```systemverilog
+class my_sequence extends uvm_sequence #(my_seq_item);
+    `uvm_object_utils(my_sequence)
+    function new(string name = "my_sequence");
+        super.new(name);
+    endfunction
+    task body();
+        set_starting_phase(get_starting_phase());
+        `uvm_info("SEQ", "Sequence started in phase", UVM_MEDIUM)
+        // Sequence logic
+    endtask
+endclass
+```
+
 It's typically used when a sequence needs to control objections explicitly, ensuring the phase doesn't end prematurely.
 
 In our example, the test itself controls objections in run_phase.
@@ -266,6 +290,65 @@ set_starting_phase is relevant for sequences that:
 
 * Run indefinitely (e.g., background stimulus).
 * Use pre_start/post_start to manage phase state.
+
+## `get_starting_phase`
+
+**Definition**:
+Retrieves the UVM phase previously set for the sequence by `set_starting_phase`, used to access or propagate phase context.
+
+**Syntax**:
+
+```systemverilog
+function uvm_phase get_starting_phase();
+```
+
+- **Returns**: The `uvm_phase` object set for the sequence, or `null` if unset.
+
+**Example**:
+
+```systemverilog
+class my_sequence extends uvm_sequence #(my_seq_item);
+    `uvm_object_utils(my_sequence)
+    task body();
+        uvm_phase phase = get_starting_phase();
+        if (phase != null)
+            `uvm_info("SEQ", $sformatf("Running in %s", phase.get_name()), UVM_MEDIUM)
+        else
+            `uvm_info("SEQ", "No phase set", UVM_MEDIUM)
+    endtask
+endclass
+```
+
+## Automatic Objection (`set_automatic_phase_objection`)
+
+**Definition**:
+Configures a sequence to automatically raise an objection when it starts and drop it when it completes, ensuring the associated phase remains active during execution.
+
+**Syntax**:
+
+```systemverilog
+function void set_automatic_phase_objection(bit value);
+```
+
+- `value`: `1` to enable automatic objections, `0` to disable (default).
+
+**Example**:
+
+```systemverilog
+class my_sequence extends uvm_sequence #(my_seq_item);
+    `uvm_object_utils(my_sequence)
+    task body();
+        set_starting_phase(get_starting_phase());
+        set_automatic_phase_objection(1);
+        `uvm_create(req)
+        start_item(req);
+        if (!req.randomize()) `uvm_fatal("SEQ", "Randomize failed")
+        finish_item(req);
+    endtask
+endclass
+```
+
+- **Note**: Requires `set_starting_phase` to specify the phase for objections.
 
 ## Drain Time
 
