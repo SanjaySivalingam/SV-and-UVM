@@ -18,7 +18,7 @@ class piso_agent extends uvm_agent;
       mon = piso_monitor::type_id::create("mon", this);
       if (is_active == UVM_ACTIVE) begin
         drv = piso_driver::type_id::create("drv", this);
-        seqr = uvm_sequencer#(piso_seq_item)::type_id::create("seqr", this);
+        seqr = piso_sequencer::type_id::create("seqr", this);
       end
     endfunction
 
