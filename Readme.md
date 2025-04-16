@@ -310,7 +310,7 @@ I use uvm_root::print_topology() to inspect the tree and check for missing or mi
 
 It risks recursive instantiation and violates UVM's hierarchical initialization, where parents build children in a top-down order.
 
-# TLM Components
+# TLM Analysis Components
 
 Transaction-Level Modeling (TLM) components in UVM enable communication between testbench components (e.g., monitor to scoreboard) using high-level transactions instead of pin-level signals, improving modularity and scalability.
 
@@ -320,16 +320,90 @@ Transaction-Level Modeling (TLM) components in UVM enable communication between 
 
 * Initiates communication by sending transactions.
 * Example: uvm_analysis_port for broadcasting.
+* The sender (e.g., monitor) declares a uvm_analysis_port.
+
+#### Syntax
+```systemverilog
+uvm_analysis_port #(TRANS) NAME;
+```
+- **TRANS**: Transaction type (e.g., seq_item).
+- **NAME**: Port name (e.g., ap).
+
+#### Role
+`ap.write(txn)` broadcasts transactions to all connected subscribers.
 
 ### Imp (Implementation)
 
+* A UVM TLM component that implements an **analysis port subscriber** (receives transactions via a write function).
 * Receives transactions, implementing methods like write.
 * Example: uvm_analysis_imp in scoreboards.
 
+#### Analysis Imp Declaration
+
+```systemverilog
+uvm_analysis_imp #(TRANS, COMP) NAME;
+```
+- **TRANS**: Transaction type (e.g., seq_item).
+- **COMP**: Component type with write (e.g., scoreboard).
+- **NAME**: Instance name (e.g., ap).
+
+#### Connecting Port to Imp
+
+Connections are made in connect_phase (e.g., in env)
+
+```systemverilog
+PORT.connect(IMP);
+```
+- **PORT**: uvm_analysis_port #(TRANS) (e.g., agt.mon.ap).
+- **IMP**: uvm_analysis_imp #(TRANS, COMP) or uvm_subscriber::analysis_export (e.g., scb.ap).
+
+#### Why Two Arguments?
+
+1. **Transaction Type**:
+   - Ensures the write function receives the correct transaction type.
+2. **Component Type**:
+   - Binds the analysis imp to the component implementing write.
+   - Ensures ap.write(txn) calls the component's write, not another class's write.
+   - Allows multiple analysis imps in one component with different transaction types.
+3. **Flexibility**:
+   - The dual parameters decouple transaction type from component type, supporting diverse use cases (e.g., one scoreboard handling multiple DUTs' transactions).
+
 ### Export
 
+* uvm_analysis_export is a TLM component that acts as an **interface** to receive transactions from a uvm_analysis_port and forward them to a component's write function or another TLM component.
 * Connects ports to imps, acting as a bridge.
 * Example: seq_item_export in sequencers.
+
+#### Role
+It's typically used to expose a component's analysis capability (e.g., write function) to external ports, allowing connections in a hierarchical or modular testbench.
+
+#### Key Difference from uvm_analysis_imp
+- **uvm_analysis_imp**: Directly implements the write function for a specific component.
+- **uvm_analysis_export**: Acts as a passthrough or connector, forwarding transactions to an internal imp or another export, without implementing write itself.
+
+#### Syntax of uvm_analysis_export
+
+**Declaration**:
+```systemverilog
+uvm_analysis_export #(TRANS) NAME;
+```
+- **TRANS**: The transaction type.
+- **NAME**: The export instance name (e.g., analysis_export).
+
+**Instantiation**:
+```systemverilog
+NAME = new("NAME", PARENT);
+```
+- Creates the export, associating it with a parent component.
+
+**Connection**:
+```systemverilog
+PORT.connect(EXPORT);
+```
+- **PORT**: A uvm_analysis_port #(TRANS).
+- **EXPORT**: A uvm_analysis_export #(TRANS).
+
+**Note**: Unlike uvm_analysis_imp, uvm_analysis_export takes **only one argument** (the transaction type), because it doesn't bind to a specific component's write function—it's a connector, not an endpoint.
 
 ### Others
 
