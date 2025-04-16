@@ -1,8 +1,7 @@
 class piso_agent extends uvm_agent;
     piso_driver drv;
     piso_monitor mon;
-
-    uvm_sequencer#(piso_seq_item) seqr;
+    piso_sequncer seqr;
     piso_config cfg;
 
     `uvm_component_utils(piso_agent)
