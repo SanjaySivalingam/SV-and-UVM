@@ -318,140 +318,236 @@ Transaction-Level Modeling (TLM) components in UVM enable communication between 
 
 The uvm_analysis_port broadcasts transactions to multiple subscribers (e.g., scoreboards, coverage collectors), supporting one-to-many communication without knowing their identities, decoupling the monitor from other components.
 
-### Declaration
-
+### Declaration and Creation
 ```systemverilog
-uvm_analysis_port #(TRANS) NAME;
+// In class declaration
+uvm_analysis_port #(transaction_type) ap;
+
+// In constructor
+function new(string name, uvm_component parent);
+  super.new(name, parent);
+  ap = new("ap", this);
+endfunction
 ```
 
-* **TRANS** : Transaction type (e.g., seq_item)
-* **NAME** : Port name (e.g., ap)
-
 ### Usage
+```systemverilog
+// In monitor's run_phase
+transaction_type tx;
+// After creating and populating transaction
+ap.write(tx);  // Broadcasts to all connected subscribers
+```
 
-* `ap.write(txn)` broadcasts transactions to all connected subscribers
-* Non-blocking: `write` executes instantly, preventing monitor stalls
-* Push-based model for simplifying monitors
+- Non-blocking: `write` executes instantly, preventing monitor stalls
+- Push-based model for simplifying monitors
 
 ## Analysis Imp
 
 A UVM TLM component that implements an analysis port subscriber (receives transactions via a write function).
 
-### Declaration
-
+### Declaration and Creation
 ```systemverilog
-uvm_analysis_imp #(TRANS, COMP) NAME;
+// In class declaration
+uvm_analysis_imp #(transaction_type, component_type) analysis_imp;
+
+// In constructor
+function new(string name, uvm_component parent);
+  super.new(name, parent);
+  analysis_imp = new("analysis_imp", this);
+endfunction
+
+// Must implement write function in the component
+function void write(transaction_type t);
+  // Process the transaction
+  // e.g., check_transaction(t) or update_coverage(t)
+endfunction
 ```
 
-* **TRANS** : Transaction type (e.g., seq_item)
-* **COMP** : Component type with write (e.g., scoreboard)
-* **NAME** : Instance name (e.g., ap)
-
 ### Why Two Type Arguments?
-
-1. **Transaction Type** : Ensures the write function receives the correct transaction type
-2. **Component Type** :
-
-* Binds the analysis imp to the component implementing write
-* Ensures ap.write(txn) calls the component's write method
-* Allows multiple analysis imps in one component with different transaction types
+1. **Transaction Type**: Ensures the write function receives the correct transaction type
+2. **Component Type**: 
+   - Binds the analysis imp to the component implementing write
+   - Ensures ap.write(txn) calls the component's write method
+   - Allows multiple analysis imps in one component with different transaction types
 
 ## Analysis Export
 
 Acts as an interface to receive transactions from a uvm_analysis_port and forward them to a component's write function or another TLM component.
 
-### Declaration
-
+### Declaration and Creation
 ```systemverilog
-uvm_analysis_export #(TRANS) NAME;
+// In class declaration (typically in subscriber or component)
+uvm_analysis_export #(transaction_type) analysis_export;
+
+// In constructor
+function new(string name, uvm_component parent);
+  super.new(name, parent);
+  analysis_export = new("analysis_export", this);
+  
+  // If this is in a uvm_subscriber or similar component that has an imp
+  // Connect the export to the imp
+  analysis_export.connect(this.analysis_imp);
+endfunction
 ```
 
-* **TRANS** : Transaction type
-* **NAME** : Export instance name (e.g., analysis_export)
-
 ### Key Difference from Analysis Imp
-
-* **Analysis Imp** : Directly implements the write function for a specific component
-* **Analysis Export** : Acts as a passthrough/connector without implementing write itself
+- **Analysis Imp**: Directly implements the write function for a specific component
+- **Analysis Export**: Acts as a passthrough/connector without implementing write itself
 
 ### Usage
-
-* Typically used to expose a component's analysis capability to external ports
-* Takes only one type argument (transaction type) because it doesn't bind to a specific component
+- Typically used to expose a component's analysis capability to external ports
+- Takes only one type argument (transaction type) because it doesn't bind to a specific component
 
 ## Analysis FIFO (uvm_tlm_analysis_fifo)
 
 Buffers transactions between an analysis port and a subscriber, decoupling their execution to prevent stalls.
 
 ### Role
+- Stores transactions from uvm_analysis_port until processed
+- Non-blocking for sender (e.g., monitor)
 
-* Stores transactions from uvm_analysis_port until processed
-* Non-blocking for sender (e.g., monitor)
+### Declaration and Creation
+```systemverilog
+// Declaration
+uvm_tlm_analysis_fifo #(TRANS) fifo;
+
+// Creation with default (unlimited) size
+fifo = new("fifo", this);
+
+// Creation with specific size
+fifo = new("fifo", this, 100);  // Limits FIFO to 100 items
+```
 
 ### Interface
+- **write**: Adds transaction to FIFO
+- **get/peek**: Retrieves transactions for subscriber
 
-* **write** : Adds transaction to FIFO
-* **get/peek** : Retrieves transactions for subscriber
+#### Access Methods
+```systemverilog
+// Writer side (typically connected to analysis_port)
+// This is usually done via connection, not direct calls
+
+// Reader side
+TRANS item;
+fifo.get(item);         // Blocking get
+fifo.try_get(item);     // Non-blocking get
+fifo.peek(item);        // Blocking peek
+fifo.try_peek(item);    // Non-blocking peek
+fifo.used();            // Returns number of items in FIFO
+fifo.is_empty();        // Returns 1 if FIFO is empty
+```
 
 ### Configuration
-
-* Default size unlimited, configurable via new(size)
-* Monitor's write blocks if FIFO is full
+- Default size unlimited, configurable via new(size)
+- Monitor's write blocks if FIFO is full
 
 ## Connecting Components
 
 Connections are made in connect_phase (e.g., in environment):
 
 ```systemverilog
-// Connect port to imp
-PORT.connect(IMP);
-
-// Connect port to export
-PORT.connect(EXPORT);
-
-// Connect port to fifo
-PORT.connect(FIFO.analysis_export);
+// In connect_phase of environment or parent component
+function void connect_phase(uvm_phase phase);
+  super.connect_phase(phase);
+  
+  // Connect port to imp
+  monitor.ap.connect(scoreboard.analysis_imp);
+  
+  // Connect port to export
+  monitor.ap.connect(subscriber.analysis_export);
+  
+  // Connect port to fifo
+  monitor.ap.connect(fifo.analysis_export);
+  
+  // Multiple connections from one port
+  monitor.ap.connect(scoreboard.analysis_imp);
+  monitor.ap.connect(coverage_collector.analysis_export);
+  monitor.ap.connect(logger.analysis_export);
+endfunction
 ```
 
 ## Other TLM Components
 
-* **Get/Put Ports** : Support request-response (used for driver-sequencer, unlike analysis)
-* **Fifo (uvm_tlm_fifo)** : General purpose transaction buffer
+### Get/Put Ports
+
+```systemverilog
+// Declaration in driver/sequencer
+uvm_blocking_get_port #(transaction_type) get_port;
+uvm_blocking_put_port #(transaction_type) put_port;
+
+// Non-blocking variants
+uvm_nonblocking_get_port #(transaction_type) get_port;
+uvm_nonblocking_put_port #(transaction_type) put_port;
+
+// Creation in constructor
+function new(string name, uvm_component parent);
+  super.new(name, parent);
+  get_port = new("get_port", this);
+  put_port = new("put_port", this);
+endfunction
+
+// Usage (blocking)
+transaction_type tx;
+get_port.get(tx);    // Wait for and retrieve transaction
+put_port.put(tx);    // Send transaction and wait for acceptance
+
+// Usage (non-blocking)
+bit success;
+success = get_port.try_get(tx);  // Returns 1 if got transaction
+success = put_port.try_put(tx);  // Returns 1 if transaction accepted
+```
+
+### Standard FIFO (uvm_tlm_fifo)
+
+```systemverilog
+// Declaration
+uvm_tlm_fifo #(transaction_type) fifo;
+
+// Creation with default size
+fifo = new("fifo", this);
+
+// Creation with specific size
+fifo = new("fifo", this, 10);
+
+// Access methods
+transaction_type tx;
+fifo.put(tx);           // Blocking put
+fifo.get(tx);           // Blocking get
+fifo.try_put(tx);       // Non-blocking put
+fifo.try_get(tx);       // Non-blocking get
+fifo.peek(tx);          // Blocking peek
+fifo.try_peek(tx);      // Non-blocking peek
+fifo.used();            // Returns number of items
+fifo.is_empty();        // Returns 1 if empty
+fifo.is_full();         // Returns 1 if full
+```
 
 ## Key Concepts
 
 ### Decoupling
-
 TLM ports allow components to communicate without direct references, enhancing reusability.
 
 ### Broadcast
-
 One analysis port can connect to multiple imps/exports, unlike sequencer-driver (one-to-one).
 
 ### Hierarchical Connections
-
 Components connect via the uvm_component hierarchy.
 
 ## FAQs
 
 ### How does analysis port differ from get/put ports?
-
 Analysis ports broadcast non-blocking to multiple subscribers; get/put are blocking for request-response communication.
 
 ### Why no read in analysis ports?
-
 Analysis ports are push-based for broadcasting, avoiding complex pull semantics.
 
 ### Why use analysis ports instead of direct calls?
-
 Ports decouple components, allowing monitors to send data to multiple subscribers without modifying code.
 
 ### When to use uvm_tlm_analysis_fifo?
-
 When subscribers are slower than monitors, to buffer transactions and prevent stalls, though direct ports suffice for simple designs.
 
 ### What happens if FIFO is full?
-
 put blocks, stalling the monitor, or try_put fails, so size the FIFO based on expected transaction rates.
 
 ## Best Practices
@@ -465,57 +561,119 @@ put blocks, stalling the monitor, or try_put fails, so size the FIFO based on ex
 * Monitor FIFO fullness for debug with fifo.used()
 * Avoid pull-based designs in analysis paths (uvm_get_port for driver-sequencer).
 
-# UVM TLM Methods
+# TLM Communication Methods
 
-get, peek, put (and try variations) methods facilitate transaction passing between UVM components, typically used with uvm_tlm_fifo, uvm_get_port, or uvm_put_port, enabling blocking and non-blocking communication.
+These methods facilitate transaction passing between UVM components, typically used with uvm_tlm_fifo, uvm_get_port, or uvm_put_port, enabling blocking and non-blocking communication.
 
 ## Core Methods
 
 ### get
+```systemverilog
+// Syntax
+function void get(output T t);
 
-* Blocking, retrieves and removes a transaction from a FIFO/port.
-* Syntax: `get(output T t)`.
-* Waits until a transaction is available.
+// Usage
+transaction_type tx;
+fifo.get(tx);  // Blocks until transaction available
+```
+- Blocking, retrieves and removes a transaction from a FIFO/port
+- Waits until a transaction is available
 
 ### try_get
+```systemverilog
+// Syntax
+function bit try_get(output T t);
 
-* Non-blocking, attempts to retrieve a transaction.
-* Syntax: `try_get(output T t)`; returns 1 if successful, 0 if empty.
+// Usage
+transaction_type tx;
+if (fifo.try_get(tx)) begin
+  // Successfully retrieved transaction
+end else begin
+  // No transaction available
+end
+```
+- Non-blocking, attempts to retrieve a transaction
+- Returns 1 if successful, 0 if empty
 
 ### put
+```systemverilog
+// Syntax
+function void put(input T t);
 
-* Blocking, sends a transaction to a FIFO/port.
-* Syntax: `put(input T t)`.
-* Waits until the receiver accepts.
+// Usage
+transaction_type tx;
+// After creating and populating tx
+fifo.put(tx);  // Blocks until receiver accepts
+```
+- Blocking, sends a transaction to a FIFO/port
+- Waits until the receiver accepts
 
 ### try_put
+```systemverilog
+// Syntax
+function bit try_put(input T t);
 
-* Non-blocking, attempts to send a transaction.
-* Syntax: `try_put(input T t)`; returns 1 if accepted, 0 if full.
+// Usage
+transaction_type tx;
+if (fifo.try_put(tx)) begin
+  // Successfully sent transaction
+end else begin
+  // Receiver not ready/full
+end
+```
+- Non-blocking, attempts to send a transaction
+- Returns 1 if accepted, 0 if full
 
 ### peek
+```systemverilog
+// Syntax
+function void peek(output T t);
 
-* Blocking, retrieves a transaction without removing it.
-* Syntax: `peek(output T t)`.
-* Waits until available.
+// Usage
+transaction_type tx;
+fifo.peek(tx);  // Blocks until transaction available
+```
+- Blocking, retrieves a transaction without removing it
+- Waits until available
 
 ### try_peek
+```systemverilog
+// Syntax
+function bit try_peek(output T t);
 
-* Non-blocking, attempts to peek.
-* Syntax: `try_peek(output T t)`; returns 1 if successful, 0 if empty.
+// Usage
+transaction_type tx;
+if (fifo.try_peek(tx)) begin
+  // Successfully peeked at transaction
+end else begin
+  // No transaction available
+end
+```
+- Non-blocking, attempts to peek
+- Returns 1 if successful, 0 if empty
 
 ## Other Variations
 
-* **can_get** : Checks if get would succeed (1 if available).
-* **can_put** : Checks if put would succeed (1 if not full).
-* **ok_to_put/ok_to_get** : Deprecated, use can_*.
+### can_get/can_put
+```systemverilog
+// Usage
+if (fifo.can_get()) begin
+  // Safe to call get without blocking
+  fifo.get(tx);
+end
 
-## Usage Considerations
+if (fifo.can_put()) begin
+  // Safe to call put without blocking
+  fifo.put(tx);
+end
+```
+- **can_get**: Checks if get would succeed (1 if available)
+- **can_put**: Checks if put would succeed (1 if not full)
+- **ok_to_put/ok_to_get**: Deprecated, use can_*
 
 ### Blocking vs. Non-Blocking
-
-* get/put suit continuous processing (e.g., coverage).
-* try_get/try_put suit polling or timeout scenarios.
+- get/put suit continuous processing (e.g., coverage)
+- try_get/try_put suit polling or timeout scenarios
 
 ## FAQs
 
