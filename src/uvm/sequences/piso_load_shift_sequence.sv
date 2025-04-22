@@ -44,4 +44,26 @@ class piso_load_shift_sequence extends piso_base_sequence;
         end
       end
     endtask
+
+   /*  Refactored
+    task send_item(bit is_load);
+      piso_seq_item req = piso_seq_item::type_id::create("req");
+      start_item(req);
+      if (!req.randomize() with { load == is_load; rst_n == 1; })
+        `uvm_error("SEQ", $sformatf("Randomization failed for %s", is_load ? "load" : "shift"))
+      req.timestamp = $time;
+      finish_item(req);
+      return req; // Allow access to cfg
+    endtask
+
+    task body;
+      piso_seq_item req;
+      repeat (num_txns) begin
+        req = send_item(1); // Load
+        #req.cfg.load_delay;
+        repeat (req.cfg.num_shifts)
+            void'(send_item(0)); // Shift
+      end
+    endtask
+    */
 endclass
