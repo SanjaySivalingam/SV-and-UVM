@@ -5,7 +5,7 @@ class piso_load_shift_sequence extends piso_base_sequence;
 
     function new(string name = "piso_load_shift_sequence");
       super.new(name);
-      if (!uvm_config_db#(int)::get(null, "uvm_test_top.env.agt.seqr", "num_txns", num_txns)) // retrieves num_txns from the config_db
+        if (!uvm_config_db#(int)::get(null, "uvm_test_top.env.agt.seqr.*", "num_txns", num_txns)) // retrieves num_txns from the config_db
         `uvm_info("SEQ", $sformatf("Using default num_txns=%0d", num_txns), UVM_MEDIUM)
         //`uvm_warning("SEQ", "num_txns not set, defaulting to 10") 
     endfunction
