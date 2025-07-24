@@ -1,5 +1,7 @@
 # _**SV & UVM Concepts**_
 
+This repository includes crucial SV and UVM concepts to have under your belt. 
+
 # SystemVerilog Event Queue
 
 The SystemVerilog event queue refers to the simulator's scheduling mechanism, organizing events. It organizes events into regions within a time step, ensuring deterministic execution and preventing race conditions.
