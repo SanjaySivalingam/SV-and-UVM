@@ -113,6 +113,149 @@ Virtual functions and classes in SystemVerilog enable polymorphism, allowing UVM
 * Avoid pure virtual unless enforcing interfaces.
 * Test polymorphism with derived classes.
 
+# Polymorphism and Virtual Methods
+
+```systemverilog
+class a;
+  int x = 1;
+  function void disp();
+    $display("I am class a");
+  endfunction
+endclass
+
+class b extends a;
+  int y = 1;
+  virtual function void disp();
+    $display("I am class b");
+  endfunction
+endclass
+
+module experiment;
+  a a1;
+  b b1;
+  initial begin
+    b1 = new();
+    a1 = b1; // Polymorphic assignment
+    a1.disp(); // Calls disp() based on object type
+  end
+endmodule
+```
+
+## Explanation
+
+* Assignment (`a1 = b1`): Assigning a derived class object (b1) to a base class handle (a1) is valid because b inherits from a. This is called upcasting, a form of polymorphism.
+* Method Call (`a1.disp()`): The virtual keyword in b::disp() ensures the derived class method is called, printing: `I am class b`
+* Without virtual, `a::disp()` would be called, printing "I am class a". This demonstrates dynamic binding, where the method executed depends on the object’s actual type (b), not the handle type (a).
+
+Key Point: The virtual keyword enables overridden methods in derived classes to be called through base class handles.
+
+## FAQs
+
+### Can we assign `a1 = b1`? 
+
+Yes, a base class handle can reference a derived class object due to inheritance.
+
+### What happens without virtual? 
+
+The base class method (`a::disp()`) is called, ignoring the derived class implementation.
+
+## Best Practices
+
+* Use virtual for methods intended for overriding.
+* Verify polymorphic behavior to ensure correct method resolution.
+
+# Shallow vs Deep Copy in SV
+
+```systemverilog
+class a;
+  int x = 10;
+endclass
+
+class b;
+  a A;
+  int y = 20;
+  function new();
+    A = new();
+  endfunction
+endclass
+
+module experiment;
+  a a1, a2;
+  b b1, b2;
+  initial begin
+    b1 = new();
+    b2 = new b1; // Copy operation
+    b1.A.x = 100;
+    $display("Value of b2.A.x %0d", b2.A.x); // Check nested object
+  end
+endmodule
+```
+## Explanation
+
+* The statement `b2 = new b1` performs a shallow copy. The new operator with an argument (copy constructor) copies `b1`’s fields to `b2`. For the handle `A`, it copies the reference, not the object, so `b1.A` and `b2.A` point to the same instance of `class a`.
+* Output: Modifying `b1.A.x = 100` changes the shared object, so `b2.A.x` is also 100. The output is: `Value of b2.A.x 100`
+* Shallow Copy: Copies scalar fields (e.g., `y`) and handle references (e.g., `A`) but not nested objects. Changes to b1.A.x affect `b2.A.x` because they share the same object.
+* Deep Copy: Would require manually creating a new a object for `b2.A` and copying its fields, e.g.:
+```systemverilog
+class b;
+  a A;
+  int y = 20;
+  function new(b src = null);
+    A = new();
+    if (src != null) begin
+      A.x = src.A.x; // Manual deep copy
+      y = src.y;
+    end
+  endfunction
+endclass
+```
+## FAQs
+
+### Is `b2 = new b1` a deep or shallow copy?
+
+It’s a shallow copy, as the handle A is copied as a reference.
+
+### How to achieve a deep copy? 
+
+Create a new instance of nested objects and copy their fields manually.
+
+## Best Practices
+
+* Use shallow copies for simple or immutable objects.
+* Implement deep copies when nested objects need isolation.
+
+# Clock Generation
+
+```systemverilog
+`timescale 1ns/1ps
+module gen;
+  logic clk = 0;
+  always #0.5 clk = ~clk;
+endmodule
+```
+## Explanation
+
+* Clock Frequency: A 1GHz clock has a period of 1ns (frequency = 1GHz = 10^9 Hz, period = 1/f = 1ns).
+* Toggle Timing: The `always #0.5 clk = ~clk` toggles `clk` every 0.5ns, creating a 1ns period (0.5ns high + 0.5ns low), matching 1GHz.
+* Timescale: The `timescale 1ns/1ps` sets the time unit to 1ns with 1ps precision, ensuring `#0.5` is 0.5ns.
+
+Key Point: The `always` block continuously toggles the clock signal, suitable for driving synchronous designs.
+
+## FAQs
+
+### Why use `#0.5` for 1GHz?
+
+A 1ns period requires toggling every 0.5ns for equal high and low phases.
+
+### What does `timescale` do? 
+
+It defines the time unit and precision for delays, ensuring accurate timing.
+
+## Best Practices
+
+* Match `timescale` to the desired clock frequency.
+* Initialize signals (e.g., `clk = 0`) to avoid undefined states.
+
 # Universal Verification Components (UVCs)
 
 A Universal Verification Component (UVC) is a reusable, protocol-specific verification module encapsulating driver, monitor, sequencer, and configuration for an interface.
@@ -1886,3 +2029,111 @@ It constraints specifies weighted randomization distributions for variables, usi
 ### What's the difference between := and :/?
 
 `:=` assigns fixed occurrence counts, like 30 load=1 in PISO; `:/` splits proportionally, ensuring 30% load=1, better for balanced stimulus.
+
+# Example - UVM Monitor for Packet Capture
+
+The monitor captures a data packet based on a protocol where `data_valid` indicates valid data to collect, and `data_last` marks the packet’s end, broadcasting the packet via a UVM analysis port.
+
+```systemverilog
+interface data_if;
+  logic clk, rst_n, data_valid, data, data_last;
+  clocking cb @(posedge clk);
+    input rst_n, data_valid, data, data_last;
+  endclocking
+endinterface
+
+class data_item extends uvm_sequence_item;
+  bit data_valid;
+  bit data[$];
+  bit data_last;
+  `uvm_object_utils_begin(data_item)
+    `uvm_field_int(data_valid, UVM_ALL_ON)
+    `uvm_field_queue_int(data, UVM_ALL_ON)
+    `uvm_field_int(data_last, UVM_ALL_ON)
+  `uvm_object_utils_end
+  function new(string name = "data_item");
+    super.new(name);
+  endfunction
+endclass
+
+class data_monitor extends uvm_monitor;
+  `uvm_component_utils(data_monitor)
+  uvm_analysis_port #(data_item) ap;
+  virtual data_if vif;
+  function new(string name, uvm_component parent = null);
+    super.new(name, parent);
+    ap = new("ap", this);
+  endfunction
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual data_if)::get(this, "", "vif", vif))
+      `uvm_fatal("MON", "No virtual interface set")
+  endfunction
+  task run_phase(uvm_phase phase);
+    data_item item;
+    bit collecting = 0;
+    @(vif.cb iff vif.rst_n); // Wait for reset deassertion
+    forever begin
+      @(vif.cb);
+      if (!vif.rst_n) begin // Handle reset during operation
+        collecting = 0;
+        item = null;
+        continue;
+      end
+      if (vif.data_valid && !collecting) begin
+        item = data_item::type_id::create("item");
+        collecting = 1;
+        item.data_valid = vif.data_valid;
+        item.data.push_back(vif.data);
+      end
+      else if (vif.data_valid && collecting) begin
+        item.data.push_back(vif.data);
+      end
+      if (vif.data_last && collecting) begin
+        item.data_last = vif.data_last;
+        ap.write(item);
+        collecting = 0; // Reset for next packet
+        item = null;
+      end
+    end
+  endtask
+endclass
+```
+## Explanation
+
+* Interface: The `data_if` defines signals (`clk`, `rst_n`, `data_valid`, `data`, `data_last`) and a clocking block (`cb`) for synchronous sampling on the positive clock edge.
+* Data Item: The `data_item` class (`extends uvm_sequence_item`) holds:
+   - `data_valid`: Captures the valid signal state.
+   - `data[$]`: A queue for storing data bits until data_last.
+   - `data_last`: Indicates packet completion.
+   - UVM macros (`uvm_object_utils`, `uvm_field_*`) enable printing and copying.
+* Monitor Logic:
+   - Waits for `rst_n` deassertion to begin monitoring (`@(vif.cb iff vif.rst_n)`).
+   - Uses a `collecting` flag to track packet collection.
+   - Creates a new `data_item` when `data_valid` is high and `collecting = 0`, sets `item.data_valid`, and captures the first `data` bit.
+   - Appends `vif.data` to `item.data` when `data_valid` is high and `collecting = 1`.
+   - On `data_last` (with `collecting = 1`), sets `item.data_last`, broadcasts via `ap.write(item)`, and resets (`collecting = 0`, `item = null`) for the next packet.
+   - Handles reset reassertion by clearing the state (`collecting = 0`, `item = null`).
+ 
+Key Point: The monitor efficiently captures packets by creating `data_item` only at packet start, collects data in a queue, and uses UVM’s analysis port for non-blocking communication of complete packets.
+
+## FAQs
+
+### Why use a `collecting` flag?
+
+It ensures a new `data_item` is created only at packet start, preventing redundant object creation and maintaining packet integrity.
+
+### What does `ap.write` do?
+
+It sends the completed `data_item` to connected subscribers without blocking the monitor, enabling parallel processing.
+
+### How is reset handled?
+
+The monitor clears its state on reset, discarding partial packets and waiting for `rst_n` to restart.
+
+## Best Practices
+
+* Create transaction items only at packet start for efficiency.
+* Handle reset explicitly for robustness.
+* Use a clocking block for synchronous sampling to avoid race conditions.
+* Ensure the virtual interface is set in `build_phase` to prevent null pointer errors.
